@@ -37,13 +37,12 @@ class recording(threading.Thread):
 			cmd = 'livestreamer -f -o \'' + filename + '\' http://hitbox.tv/' + self.channel + ' best'
 		elif self.streaming_service == 'twitch':
 			cmd = 'livestreamer -f -o \'' + filename + '\' http://twitch.tv/' + self.channel + ' best'
-		#print cmd
 		
 		self.process = subprocess.Popen(cmd, shell=True)
 		self.process.wait()
 
 		print "Starting uploading to yt..." + self.channel + ' ' + self.game + ' ' + self.local_time 
-		cmd = 'youtube-upload --privacy=unlisted ' + '--title=\'' + title + '\' --category=Gaming --tags=\'' + self.game + '\' \'' + filename + '\'' 
+		cmd = 'trickle -s -u 2048 youtube-upload --privacy=unlisted ' + '--title=\'' + title + '\' --category=Gaming --tags=\'' + self.game + '\' \'' + filename + '\'' 
 		process_yt = subprocess.Popen(cmd, shell=True)
 		process_yt.wait()
 		
@@ -147,28 +146,29 @@ class stream_service_info(threading.Thread):
 def dict_check(stream_dict_before, stream_dict_after):
 	global thread_list
 	global global_local_date
+	global_local_date = datetime.now()
 	live_on_list = []
 	for key in thread_list:
 		split_thr = key.split('|')
 
-		comp_time_now = datetime.now()
+		#comp_time_now = datetime.now()
 		comp_time_thr = datetime.strptime(split_thr[3], "%Y-%m-%d %H:%M")
-		diff = comp_time_now - comp_time_thr
+		diff = global_local_date - comp_time_thr
 		diff_minutes = diff.seconds/60
 		print str(key) + 'Thr time diff ' + str(diff_minutes)
 		if int(diff_minutes) > int(split_thr[4]):
 			#stop recording time elapsed
-			print 'stopping recording due time and starting ' + key
+			new_thr_part = split_thr[0] + '|' + split_thr[1] + '|' + split_thr[2] + '|' + global_local_date.strftime("%Y-%m-%d %H:%M") + '|' + split_thr[4]
+			print 'stopping recording due time and starting ' + new_thr_part
 			thread_list[key].stop()
 			thread_list.pop(key, None)
-			global_local_date = datetime.now()
-			new_thr_part = split_thr[0] + '|' + split_thr[1] + '|' + global_local_date.strftime("%Y-%m-%d %H:%M") + '|' + split_thr[3] + '|' + split_thr[4]
-			thread_list[new_thr_part] = recording(split_thr[0], split_thr[1], split_thr[2], split_thr[3], split_thr[4])
+
+			thread_list[new_thr_part] = recording(split_thr[0], split_thr[1], split_thr[2], global_local_date.strftime("%Y-%m-%d %H:%M"), split_thr[4])
 			thread_list[new_thr_part].start()
 		try:
 			live_on_list.append(split_thr[0] + '|' + split_thr[1])
 		except:
-			pass
+			print 'no live on list'
 		
 
 	for key in stream_dict_after:
@@ -201,7 +201,8 @@ def dict_check(stream_dict_before, stream_dict_after):
 def main():
 	global global_local_date
 	global stream_dict
-	
+	global streams_dir
+
 	if streams_dir[-1:] != '/' or streams_dir[-1:] != '\\':
 		streams_dir = streams_dir + '/'
 
@@ -215,7 +216,7 @@ def main():
 			stream_dict_before = stream_dict.copy()
 			stream_dict = {}
 			#start stream info thread to get info about streams
-			thread_service_checker = stream_service_info([])
+			thread_service_checker = stream_service_info([], [])
 			thread_service_checker.start()
 			thread_service_checker.join()
 
