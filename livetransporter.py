@@ -50,7 +50,6 @@ class recording(threading.Thread):
 		cmd = 'rm \'' + filename + '\''
 		process_rm = subprocess.Popen(cmd, shell=True)
 		process_rm.wait()
-
 		thread_list.pop(self.streaming_service + "|" + self.channel + "|" + self.game + "|" + self.local_time + "|" + self.cut_time, None)
 
 	def stop(self):
@@ -68,7 +67,7 @@ class stream_service_info(threading.Thread):
 		self.channels_twitch = channels_twitch
 		self.channels_hitbox = channels_hitbox
 	def run(self):
-		print "(%s)----------working----------" % (global_local_date.strftime("%Y-%m-%d %H:%M"))
+		print "(%s)----------working----------" % (global_local_date.strftime("%Y-%m-%d %H:%M:%S"))
 		# Get lock to synchronize threads
 		threadLock.acquire()
 		self.parse_json(self.channels_twitch, 'twitch', 'https://api.twitch.tv/kraken/streams?channel=')
@@ -130,18 +129,20 @@ class stream_service_info(threading.Thread):
 			ch_dict[ch_list[0]] = ch_list[1]
 
 		channel_list_dict = list(ch_dict.keys())
-		local_time = global_local_date.strftime("%Y-%m-%d %H:%M")
-
+		local_time = global_local_date.strftime("%Y-%m-%d %H:%M:%S")
+		resp_count = 0
 		response = self.get_http_data(channel_list_dict, streaming_api_link)
-		while response == '-1':
+		while response == '-1' and resp_count != 3:
 			response = self.get_http_data(channel_list_dict, streaming_api_link)
+			resp_count = resp_count + 1
+		if response == '-1':
+			return
 		info = json.loads(response.read().decode('utf-8'))
 		
 		if streaming_service == 'twitch':
 			self.parse_twitch(info, streaming_service, local_time, ch_dict)
 		elif streaming_service == 'hitbox':
 			self.parse_hitbox(info, streaming_service, local_time, ch_dict)
-
 
 def dict_check(stream_dict_before, stream_dict_after):
 	global thread_list
@@ -152,19 +153,22 @@ def dict_check(stream_dict_before, stream_dict_after):
 		split_thr = key.split('|')
 
 		#comp_time_now = datetime.now()
-		comp_time_thr = datetime.strptime(split_thr[3], "%Y-%m-%d %H:%M")
+		comp_time_thr = datetime.strptime(split_thr[3], "%Y-%m-%d %H:%M:%S")
 		diff = global_local_date - comp_time_thr
-		diff_minutes = diff.seconds/60
-		print str(key) + 'Thr time diff ' + str(diff_minutes)
-		if int(diff_minutes) > int(split_thr[4]):
+		#diff_minutes = diff.seconds/60
+		#print str(key) + 'Thr time diff ' + str(diff.seconds)
+		if int(diff.seconds) >= int(split_thr[4]):
 			#stop recording time elapsed
-			new_thr_part = split_thr[0] + '|' + split_thr[1] + '|' + split_thr[2] + '|' + global_local_date.strftime("%Y-%m-%d %H:%M") + '|' + split_thr[4]
+			new_thr_part = split_thr[0] + '|' + split_thr[1] + '|' + split_thr[2] + '|' + global_local_date.strftime("%Y-%m-%d %H:%M:%S") + '|' + split_thr[4]
 			print 'stopping recording due time and starting ' + new_thr_part
-			thread_list[key].stop()
-			thread_list.pop(key, None)
+			try:
+				thread_list[key].stop()
+				thread_list.pop(key, None)
 
-			thread_list[new_thr_part] = recording(split_thr[0], split_thr[1], split_thr[2], global_local_date.strftime("%Y-%m-%d %H:%M"), split_thr[4])
-			thread_list[new_thr_part].start()
+				thread_list[new_thr_part] = recording(split_thr[0], split_thr[1], split_thr[2], global_local_date.strftime("%Y-%m-%d %H:%M:%S"), split_thr[4])
+				thread_list[new_thr_part].start()
+			except:
+				print 'not stopping thread not on list'
 		try:
 			live_on_list.append(split_thr[0] + '|' + split_thr[1])
 		except:
@@ -174,7 +178,6 @@ def dict_check(stream_dict_before, stream_dict_after):
 	for key in stream_dict_after:
 		try:
 			key_after = key + '|' + stream_dict_after[key]
-			key_before = key + '|' + stream_dict_before[key]
 		except:
 			pass
 		if key not in stream_dict_before and key not in live_on_list:
@@ -190,6 +193,9 @@ def dict_check(stream_dict_before, stream_dict_after):
 			if after_list[0] != before_list[0]:
 				#start recording game changed
 				print 'game changed, stopping recording and starting ' + key_after
+				for key_thr, value in thread_list.iteritems():
+					if key_thr.startswith(key):
+						key_before = key_thr
 				thread_list[key_before].stop()
 				thread_list.pop(key_before, None)
 				split_key = key.split('|')
@@ -202,35 +208,38 @@ def main():
 	global global_local_date
 	global stream_dict
 	global streams_dir
-
+	sec_counter = 0
 	if streams_dir[-1:] != '/' or streams_dir[-1:] != '\\':
 		streams_dir = streams_dir + '/'
 
 	while 1:
-		global_local_date = datetime.now()
+			global_local_date = datetime.now()
 
-		if global_local_date.second > 10 : 
-			stream_dict_before = {}
-			stream_dict_after = {}
 			#copy information about streams before cycle
 			stream_dict_before = stream_dict.copy()
-			stream_dict = {}
 			#start stream info thread to get info about streams
-			thread_service_checker = stream_service_info([], [])
-			thread_service_checker.start()
-			thread_service_checker.join()
+			if sec_counter == 0:
+				#stream_dict_before = {}
+				stream_dict_after = {}
+				stream_dict = {}
+				thread_service_checker = stream_service_info([],[])
+				thread_service_checker.start()
+				thread_service_checker.join()
 
-			time.sleep(55)
+
+			time.sleep(1)
 			#copy information about streams before cycle
 			stream_dict_after = stream_dict.copy()
 			#thread control function
 			dict_check(stream_dict_before, stream_dict_after)
-			
-			print 'before, after ' + str(stream_dict_before) + ' ' + str(stream_dict_after)
-			print thread_list
-		else:
-			time.sleep(5)
+			if sec_counter == 0:
 
+				print 'before, after ' + str(stream_dict_before) + ' ' + str(stream_dict_after)
+				print thread_list
+			if sec_counter == 59:
+				sec_counter = 0
+			else:
+				sec_counter = sec_counter + 1
 	print "Exiting Main Thread"
 
 threadLock = threading.Lock()
