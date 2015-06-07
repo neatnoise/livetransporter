@@ -1,4 +1,4 @@
-# livetransporter
+# livetransporter features and TODO
 Aktualnie jest działająca wczesna wersja aplikacji, posiada następujące feature'y:
 - automatyczne wykrywanie streamu gdy jest online (wsparcie hitbox i twitch)
 - pobieranie na żywo livestreamu w czasie trwania live (wsparcie hitbox i twitch)
