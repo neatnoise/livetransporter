@@ -6,6 +6,8 @@ from datetime import datetime
 import threading
 import json
 import subprocess
+import os.path
+
 global global_local_date
 global stream_dict
 global thread_list
@@ -37,20 +39,20 @@ class recording(threading.Thread):
 			cmd = 'livestreamer -f -o \'' + filename + '\' http://hitbox.tv/' + self.channel + ' best'
 		elif self.streaming_service == 'twitch':
 			cmd = 'livestreamer -f -o \'' + filename + '\' http://twitch.tv/' + self.channel + ' best'
-		
 		self.process = subprocess.Popen(cmd, shell=True)
 		self.process.wait()
-
-		print "Starting uploading to yt..." + self.channel + ' ' + self.game + ' ' + self.local_time 
-		cmd = 'trickle -s -u 2048 youtube-upload --privacy=unlisted ' + '--title=\'' + title + '\' --category=Gaming --tags=\'' + self.game + '\' \'' + filename + '\'' 
-		process_yt = subprocess.Popen(cmd, shell=True)
-		process_yt.wait()
-		
-		print "Finished uploading... Exiting " + self.name + ' ' + self.channel + ' ' + self.game
-		cmd = 'rm \'' + filename + '\''
-		process_rm = subprocess.Popen(cmd, shell=True)
-		process_rm.wait()
 		thread_list.pop(self.streaming_service + "|" + self.channel + "|" + self.game + "|" + self.local_time + "|" + self.cut_time, None)
+		
+		if os.path.isfile(filename):
+			print "Starting uploading to yt..." + self.channel + ' ' + self.game + ' ' + self.local_time 
+			cmd = 'trickle -s -u 2048 youtube-upload --privacy=unlisted ' + '--title=\'' + title + '\' --category=Gaming --tags=\'' + self.game + '\' \'' + filename + '\'' 
+			process_yt = subprocess.Popen(cmd, shell=True)
+			process_yt.wait()
+		
+			print "Finished uploading... Exiting " + self.name + ' ' + self.channel + ' ' + self.game
+			cmd = 'rm \'' + filename + '\''
+			process_rm = subprocess.Popen(cmd, shell=True)
+			process_rm.wait()
 
 	def stop(self):
 		print "Trying to stop thread " + self.channel + ':' + self.game
@@ -121,6 +123,29 @@ class stream_service_info(threading.Thread):
 				except:
 					stream_dict[streaming_service + "|" + login] = 'not_set' + local_time + "|" + time_cut[login]
 
+
+	def http_loop(self, tries, channel_list_dict, streaming_api_link):
+		resp_count = 0
+		response = self.get_http_data(channel_list_dict, streaming_api_link)
+		while response == '-1' and resp_count != tries:
+			response = self.get_http_data(channel_list_dict, streaming_api_link)
+			resp_count = resp_count + 1
+			time.sleep(2)
+		
+		return response
+		
+	def json_loop(self, tries, response, channel_list_dict, streaming_api_link):
+		resp_count = 0
+		info = '-1'
+		while True and resp_count != tries:
+			try:
+				info = json.loads(response.read().decode('utf-8'))
+				break
+			except:
+				response = self.http_loop(10, channel_list_dict, streaming_api_link)
+				resp_count = resp_count + 1
+		return info
+
 	def parse_json(self, channel_list, streaming_service, streaming_api_link):
 		ch_dict = {}
 		
@@ -130,15 +155,13 @@ class stream_service_info(threading.Thread):
 
 		channel_list_dict = list(ch_dict.keys())
 		local_time = global_local_date.strftime("%Y-%m-%d %H:%M:%S")
-		resp_count = 0
-		response = self.get_http_data(channel_list_dict, streaming_api_link)
-		while response == '-1' and resp_count != 3:
-			response = self.get_http_data(channel_list_dict, streaming_api_link)
-			resp_count = resp_count + 1
+		
+		response = self.http_loop(10, channel_list_dict, streaming_api_link)
+
+		info = self.json_loop(10, response, channel_list_dict, streaming_api_link)
+		
 		if response == '-1':
 			return
-		info = json.loads(response.read().decode('utf-8'))
-		
 		if streaming_service == 'twitch':
 			self.parse_twitch(info, streaming_service, local_time, ch_dict)
 		elif streaming_service == 'hitbox':
@@ -180,14 +203,14 @@ def dict_check(stream_dict_before, stream_dict_after):
 			key_after = key + '|' + stream_dict_after[key]
 		except:
 			pass
-		if key not in stream_dict_before and key not in live_on_list:
+		if key not in live_on_list:
 			#start recording no stream before
 			print 'start recording ' + key_after
 			split_key = key.split('|')
 			split_val = stream_dict_after[key].split('|')
 			thread_list[key_after] = recording(split_key[0], split_key[1], split_val[0], split_val[1], split_val[2])
 			thread_list[key_after].start()
-		else:
+		else:			
 			before_list = stream_dict_before[key].split('|')
 			after_list = stream_dict_after[key].split('|')
 			if after_list[0] != before_list[0]:
@@ -215,8 +238,12 @@ def main():
 	while 1:
 			global_local_date = datetime.now()
 
+#		if global_local_date.second > 10 : 
+			#stream_dict_before = {}
+			#stream_dict_after = {}
 			#copy information about streams before cycle
 			stream_dict_before = stream_dict.copy()
+			#stream_dict = {}
 			#start stream info thread to get info about streams
 			if sec_counter == 0:
 				#stream_dict_before = {}
@@ -236,6 +263,8 @@ def main():
 
 				print 'before, after ' + str(stream_dict_before) + ' ' + str(stream_dict_after)
 				print thread_list
+		#else:
+		#	time.sleep(5)
 			if sec_counter == 59:
 				sec_counter = 0
 			else:
