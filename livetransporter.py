@@ -50,7 +50,7 @@ class recording(threading.Thread):
 		
 		if os.path.isfile(filename):
 			print "Starting uploading to yt... %s %s %s" % (self.channel, self.game, self.local_time) 
-			cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" (title, self.game, filename) 
+			cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" % (title, self.game, filename) 
 			process_yt = subprocess.Popen(cmd, shell=True)
 			process_yt.wait()
 		
