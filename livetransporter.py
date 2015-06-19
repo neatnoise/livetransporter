@@ -27,35 +27,40 @@ class recording(threading.Thread):
 		self.local_time = local_time
 		self.cut_time = cut_time
 
+
+	def shellquote(self, str):
+		return str.replace("\"", "\\\"")
+		
 	def run(self):
 		global thread_list
 		global streams_dir
 
-		print "Starting " + self.channel
-		
-		filename = streams_dir + self.channel.title() + ' ' + self.game + ' - ' + self.local_time + '.mp4'
-		title = self.channel.title() + ' ' + self.game + ' - ' + self.local_time
+		print("Starting %s" % (self.channel))
+		filename = "%s%s %s - %s.mp4" % (streams_dir, self.channel.title(), self.game, self.local_time)
+		title = "%s %s - %s" % (self.channel.title(), self.game, self.local_time)
+
 		if self.streaming_service == 'hitbox':
-			cmd = 'livestreamer -f -o \'' + filename + '\' http://hitbox.tv/' + self.channel + ' best'
+			cmd = "livestreamer -f -o \"%s\" http://hitbox.tv/%s best" % (filename, self.channel)
 		elif self.streaming_service == 'twitch':
-			cmd = 'livestreamer -f -o \'' + filename + '\' http://twitch.tv/' + self.channel + ' best'
+			cmd = "livestreamer -f -o \"%s\" http://twitch.tv/%s best" % (filename, self.channel)
+		
 		self.process = subprocess.Popen(cmd, shell=True)
 		self.process.wait()
-		thread_list.pop(self.streaming_service + "|" + self.channel + "|" + self.game + "|" + self.local_time + "|" + self.cut_time, None)
+		thread_list.pop("%s|%s|%s|%s|%s" % (self.streaming_service,self.channel, self.game, self.local_time, self.cut_time), None)
 		
 		if os.path.isfile(filename):
-			print "Starting uploading to yt..." + self.channel + ' ' + self.game + ' ' + self.local_time 
-			cmd = 'trickle -s -u 2048 youtube-upload --privacy=unlisted ' + '--title=\'' + title + '\' --category=Gaming --tags=\'' + self.game + '\' \'' + filename + '\'' 
+			print "Starting uploading to yt... %s %s %s" % (self.channel, self.game, self.local_time) 
+			cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" (title, self.game, filename) 
 			process_yt = subprocess.Popen(cmd, shell=True)
 			process_yt.wait()
 		
-			print "Finished uploading... Exiting " + self.name + ' ' + self.channel + ' ' + self.game
-			cmd = 'rm \'' + filename + '\''
+			print "Finished uploading... Exiting %s %s %s" % (self.name, self.channel, self.game)
+			cmd = "rm \"%s\"" % (self.shellquote(filename))
 			process_rm = subprocess.Popen(cmd, shell=True)
 			process_rm.wait()
 
 	def stop(self):
-		print "Trying to stop thread " + self.channel + ':' + self.game
+		print("Trying to stop thread %s: %s" % (self.channel, self.game))
 		if self.process is not None:
 			self.process.terminate()
 			self.process = None
@@ -82,18 +87,15 @@ class stream_service_info(threading.Thread):
 			response = urllib2.urlopen(request)
 			return response
 		except urllib2.HTTPError, e:
-			print 'HTTPError = ' + str(e.code)
-			time.sleep(2)
-			return '-1'
+			print("HTTPError = %s" % (str(e.code)))
+			return -1
 		except urllib2.URLError, e:
-			print 'URLError = ' + str(e.reason)
-			time.sleep(2)
-			return '-1'
+			print("URLError = %s" % (str(e.reason)))
+			return -1
 		except:
 			import traceback
-			print 'generic exception: ' + traceback.format_exc()
-			time.sleep(2)
-			return '-1'
+			print "Generic exception: %s" % (traceback.format_exc())
+			return -1
 	
 	def parse_twitch(self, info, streaming_service, local_time, time_cut):
 		global stream_dict
@@ -103,11 +105,11 @@ class stream_service_info(threading.Thread):
 				
 			try:
 				if k['channel']['game'] is None:
-					stream_dict[streaming_service + "|" + login] = 'not_set' + "|" + local_time + "|" + time_cut[login]
+					stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
 				else:
-					stream_dict[streaming_service + "|" + login] = str(k['channel']['game']) + "|" + local_time + "|" + time_cut[login]
+					stream_dict["%s|%s" % (streaming_service, login)] = "%s|%s|%s" % (str(k['channel']['game']), local_time,  time_cut[login])
 			except:
-				stream_dict[streaming_service + "|" + login] = 'not_set' + "|" + local_time + "|" + time_cut[login]
+				stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
 
 	def parse_hitbox(self, info, streaming_service, local_time, time_cut):
 		global stream_dict
@@ -117,17 +119,16 @@ class stream_service_info(threading.Thread):
 				print "- %s (Hitbox)" % (login)
 				try:
 					if k['category_name'] is None:
-						stream_dict[streaming_service + "|" + login] = 'not_set' + "|" + local_time + "|" + time_cut[login]
+						stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
 					else:
-						stream_dict[streaming_service + "|" + login] =  str(k['category_name']) + "|" + local_time + "|" + time_cut[login]
+						stream_dict["%s|%s" % (streaming_service, login)] = "%s||%s|%s" % (str(k['category_name']), local_time,  time_cut[login])						
 				except:
-					stream_dict[streaming_service + "|" + login] = 'not_set' + local_time + "|" + time_cut[login]
-
+					stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
 
 	def http_loop(self, tries, channel_list_dict, streaming_api_link):
 		resp_count = 0
 		response = self.get_http_data(channel_list_dict, streaming_api_link)
-		while response == '-1' and resp_count != tries:
+		while response == -1 and resp_count != tries:
 			response = self.get_http_data(channel_list_dict, streaming_api_link)
 			resp_count = resp_count + 1
 			time.sleep(2)
@@ -136,14 +137,15 @@ class stream_service_info(threading.Thread):
 		
 	def json_loop(self, tries, response, channel_list_dict, streaming_api_link):
 		resp_count = 0
-		info = '-1'
-		while True and resp_count != tries:
+		info = -1
+		while resp_count != tries:
 			try:
 				info = json.loads(response.read().decode('utf-8'))
 				break
 			except:
 				response = self.http_loop(10, channel_list_dict, streaming_api_link)
 				resp_count = resp_count + 1
+				time.sleep(2)
 		return info
 
 	def parse_json(self, channel_list, streaming_service, streaming_api_link):
@@ -160,7 +162,7 @@ class stream_service_info(threading.Thread):
 
 		info = self.json_loop(10, response, channel_list_dict, streaming_api_link)
 		
-		if response == '-1':
+		if info == -1:
 			return
 		if streaming_service == 'twitch':
 			self.parse_twitch(info, streaming_service, local_time, ch_dict)
@@ -182,7 +184,7 @@ def dict_check(stream_dict_before, stream_dict_after):
 		#print str(key) + 'Thr time diff ' + str(diff.seconds)
 		if int(diff.seconds) >= int(split_thr[4]):
 			#stop recording time elapsed
-			new_thr_part = split_thr[0] + '|' + split_thr[1] + '|' + split_thr[2] + '|' + global_local_date.strftime("%Y-%m-%d %H:%M:%S") + '|' + split_thr[4]
+			new_thr_part = "%s|%s|%s|%s|%s" % (split_thr[0], split_thr[1], split_thr[2], global_local_date.strftime("%Y-%m-%d %H:%M:%S"), split_thr[4])
 			print 'stopping recording due time and starting ' + new_thr_part
 			try:
 				thread_list[key].stop()
@@ -191,16 +193,16 @@ def dict_check(stream_dict_before, stream_dict_after):
 				thread_list[new_thr_part] = recording(split_thr[0], split_thr[1], split_thr[2], global_local_date.strftime("%Y-%m-%d %H:%M:%S"), split_thr[4])
 				thread_list[new_thr_part].start()
 			except:
-				print 'not stopping thread not on list'
+				print('Not stopping thread not on list')
 		try:
-			live_on_list.append(split_thr[0] + '|' + split_thr[1])
+			live_on_list.append("%s|%s" % (split_thr[0], split_thr[1]))
 		except:
-			print 'no live on list'
+			print('No live on list')
 		
 
 	for key in stream_dict_after:
 		try:
-			key_after = key + '|' + stream_dict_after[key]
+			key_after = "%s|%s" % (key, stream_dict_after[key])
 		except:
 			pass
 		if key not in live_on_list:
@@ -215,7 +217,7 @@ def dict_check(stream_dict_before, stream_dict_after):
 			after_list = stream_dict_after[key].split('|')
 			if after_list[0] != before_list[0]:
 				#start recording game changed
-				print 'game changed, stopping recording and starting ' + key_after
+				print("Game changed, stopping recording and starting %s" % (key_after))
 				for key_thr, value in thread_list.iteritems():
 					if key_thr.startswith(key):
 						key_before = key_thr
@@ -233,7 +235,7 @@ def main():
 	global streams_dir
 	sec_counter = 0
 	if streams_dir[-1:] != '/' or streams_dir[-1:] != '\\':
-		streams_dir = streams_dir + '/'
+		streams_dir = "%s/" % (streams_dir)
 
 	while 1:
 			global_local_date = datetime.now()
@@ -249,7 +251,7 @@ def main():
 				#stream_dict_before = {}
 				stream_dict_after = {}
 				stream_dict = {}
-				thread_service_checker = stream_service_info([],[])
+				thread_service_checker = stream_service_info()
 				thread_service_checker.start()
 				thread_service_checker.join()
 
@@ -261,15 +263,15 @@ def main():
 			dict_check(stream_dict_before, stream_dict_after)
 			if sec_counter == 0:
 
-				print 'before, after ' + str(stream_dict_before) + ' ' + str(stream_dict_after)
-				print thread_list
+				print("Before, After %s %s" % (str(stream_dict_before), str(stream_dict_after)))
+				print(thread_list)
 		#else:
 		#	time.sleep(5)
 			if sec_counter == 59:
 				sec_counter = 0
 			else:
 				sec_counter = sec_counter + 1
-	print "Exiting Main Thread"
+	print('Exiting Main Thread')
 
 threadLock = threading.Lock()
 
