@@ -40,17 +40,17 @@ class recording(threading.Thread):
 		title = "%s %s - %s" % (self.channel.title(), self.game, self.local_time)
 
 		if self.streaming_service == 'hitbox':
-			cmd = "livestreamer -f -o \"%s\" http://hitbox.tv/%s best" % (filename, self.channel)
+			cmd = "livestreamer -f -o \"%s\" http://hitbox.tv/%s best" % (self.shellquote(filename), self.shellquote(self.channel))
 		elif self.streaming_service == 'twitch':
-			cmd = "livestreamer -f -o \"%s\" http://twitch.tv/%s best" % (filename, self.channel)
-		
+			cmd = "livestreamer -f -o \"%s\" http://twitch.tv/%s best" % (self.shellquote(filename), self.shellquote(self.channel))
+		print cmd
 		self.process = subprocess.Popen(cmd, shell=True)
 		self.process.wait()
 		thread_list.pop("%s|%s|%s|%s|%s" % (self.streaming_service,self.channel, self.game, self.local_time, self.cut_time), None)
 		
 		if os.path.isfile(filename):
 			print "Starting uploading to yt... %s %s %s" % (self.channel, self.game, self.local_time) 
-			cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" % (title, self.game, filename) 
+			cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" % (self.shellquote(title), self.shellquote(self.game), self.shellquote(filename)) 
 			process_yt = subprocess.Popen(cmd, shell=True)
 			process_yt.wait()
 		
@@ -121,7 +121,7 @@ class stream_service_info(threading.Thread):
 					if k['category_name'] is None:
 						stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
 					else:
-						stream_dict["%s|%s" % (streaming_service, login)] = "%s||%s|%s" % (str(k['category_name']), local_time,  time_cut[login])						
+						stream_dict["%s|%s" % (streaming_service, login)] = "%s|%s|%s" % (str(k['category_name']), local_time,  time_cut[login])						
 				except:
 					stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
 
