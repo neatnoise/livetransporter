@@ -7,6 +7,8 @@ import threading
 import json
 import subprocess
 import os.path
+import sys
+import signal
 
 global global_local_date
 global stream_dict
@@ -43,12 +45,13 @@ class recording(threading.Thread):
 			cmd = "livestreamer -f -o \"%s\" http://hitbox.tv/%s best" % (self.shellquote(filename), self.shellquote(self.channel))
 		elif self.streaming_service == 'twitch':
 			cmd = "livestreamer -f -o \"%s\" http://twitch.tv/%s best" % (self.shellquote(filename), self.shellquote(self.channel))
-		print cmd
+		
 		self.process = subprocess.Popen(cmd, shell=True)
 		self.process.wait()
 		thread_list.pop("%s|%s|%s|%s|%s" % (self.streaming_service,self.channel, self.game, self.local_time, self.cut_time), None)
 		
 		if os.path.isfile(filename):
+			signal.signal(signal.SIGINT, self.signal_handler(filename))
 			resp_count = 0
 			print "Starting uploading to yt... %s %s %s" % (self.channel, self.game, self.local_time) 
 			cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" % (self.shellquote(title), self.shellquote(self.game), self.shellquote(filename)) 
@@ -59,7 +62,7 @@ class recording(threading.Thread):
 				process_yt = subprocess.Popen(cmd, shell=True)
 				process_yt.wait()
 				resp_count = resp_count + 1
-				time.sleep(10)
+				time.sleep(1)
 			
 			print("Finished uploading... Exiting %s %s %s" % (self.name, self.channel, self.game))
 
@@ -69,6 +72,13 @@ class recording(threading.Thread):
 				cmd = "rm \"%s\"" % (self.shellquote(filename))
 				process_rm = subprocess.Popen(cmd, shell=True)
 				process_rm.wait()
+
+	def signal_handler(self, filename):
+		cmd = "rm \"%s\"" % (self.shellquote(filename))
+		process_rm = subprocess.Popen(cmd, shell=True)
+		process_rm.wait()
+
+		sys.exit(0)
 
 
 	def stop(self):
