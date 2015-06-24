@@ -49,15 +49,27 @@ class recording(threading.Thread):
 		thread_list.pop("%s|%s|%s|%s|%s" % (self.streaming_service,self.channel, self.game, self.local_time, self.cut_time), None)
 		
 		if os.path.isfile(filename):
+			resp_count = 0
 			print "Starting uploading to yt... %s %s %s" % (self.channel, self.game, self.local_time) 
 			cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" % (self.shellquote(title), self.shellquote(self.game), self.shellquote(filename)) 
 			process_yt = subprocess.Popen(cmd, shell=True)
 			process_yt.wait()
-		
-			print "Finished uploading... Exiting %s %s %s" % (self.name, self.channel, self.game)
-			cmd = "rm \"%s\"" % (self.shellquote(filename))
-			process_rm = subprocess.Popen(cmd, shell=True)
-			process_rm.wait()
+
+			while process_yt.returncode != 0 and resp_count != 5:
+				process_yt = subprocess.Popen(cmd, shell=True)
+				process_yt.wait()
+				resp_count = resp_count + 1
+				time.sleep(10)
+			
+			print("Finished uploading... Exiting %s %s %s" % (self.name, self.channel, self.game))
+
+			if resp_count == 5:
+				print("Upload failed, not removing video")
+			else:
+				cmd = "rm \"%s\"" % (self.shellquote(filename))
+				process_rm = subprocess.Popen(cmd, shell=True)
+				process_rm.wait()
+
 
 	def stop(self):
 		print("Trying to stop thread %s: %s" % (self.channel, self.game))
@@ -105,11 +117,11 @@ class stream_service_info(threading.Thread):
 				
 			try:
 				if k['channel']['game'] is None:
-					stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
+					stream_dict["%s|%s" % (streaming_service, login)] = "Not Set|%s|%s" % (local_time,  time_cut[login])
 				else:
 					stream_dict["%s|%s" % (streaming_service, login)] = "%s|%s|%s" % (str(k['channel']['game']), local_time,  time_cut[login])
 			except:
-				stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
+				stream_dict["%s|%s" % (streaming_service, login)] = "Not Set|%s|%s" % (local_time,  time_cut[login])
 
 	def parse_hitbox(self, info, streaming_service, local_time, time_cut):
 		global stream_dict
@@ -119,11 +131,11 @@ class stream_service_info(threading.Thread):
 				print "- %s (Hitbox)" % (login)
 				try:
 					if k['category_name'] is None:
-						stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
+						stream_dict["%s|%s" % (streaming_service, login)] = "Not Set|%s|%s" % (local_time,  time_cut[login])
 					else:
 						stream_dict["%s|%s" % (streaming_service, login)] = "%s|%s|%s" % (str(k['category_name']), local_time,  time_cut[login])						
 				except:
-					stream_dict["%s|%s" % (streaming_service, login)] = "not_set|%s|%s" % (local_time,  time_cut[login])
+					stream_dict["%s|%s" % (streaming_service, login)] = "Not Set|%s|%s" % (local_time,  time_cut[login])
 
 	def http_loop(self, tries, channel_list_dict, streaming_api_link):
 		resp_count = 0
@@ -213,8 +225,11 @@ def dict_check(stream_dict_before, stream_dict_after):
 			thread_list[key_after] = recording(split_key[0], split_key[1], split_val[0], split_val[1], split_val[2])
 			thread_list[key_after].start()
 		else:			
-			before_list = stream_dict_before[key].split('|')
-			after_list = stream_dict_after[key].split('|')
+			try:
+				before_list = stream_dict_before[key].split('|')
+				after_list = stream_dict_after[key].split('|')
+			except:
+				print("Cannot create before or after list")
 			if after_list[0] != before_list[0]:
 				#start recording game changed
 				print("Game changed, stopping recording and starting %s" % (key_after))
