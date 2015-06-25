@@ -8,7 +8,6 @@ import json
 import subprocess
 import os.path
 import sys
-import signal
 
 global global_local_date
 global stream_dict
@@ -29,64 +28,46 @@ class recording(threading.Thread):
 		self.local_time = local_time
 		self.cut_time = cut_time
 
-
 	def shellquote(self, str):
 		return str.replace("\"", "\\\"")
 		
 	def run(self):
 		global thread_list
 		global streams_dir
-
 		print("Starting %s" % (self.channel))
 		filename = "%s%s %s - %s.mp4" % (streams_dir, self.channel.title(), self.game, self.local_time)
 		title = "%s %s - %s" % (self.channel.title(), self.game, self.local_time)
-
 		if self.streaming_service == 'hitbox':
 			cmd = "livestreamer -f -o \"%s\" http://hitbox.tv/%s best" % (self.shellquote(filename), self.shellquote(self.channel))
 		elif self.streaming_service == 'twitch':
 			cmd = "livestreamer -f -o \"%s\" http://twitch.tv/%s best" % (self.shellquote(filename), self.shellquote(self.channel))
-		
+
 		self.process = subprocess.Popen(cmd, shell=True)
 		self.process.wait()
 		thread_list.pop("%s|%s|%s|%s|%s" % (self.streaming_service,self.channel, self.game, self.local_time, self.cut_time), None)
 		
 		if os.path.isfile(filename):
-			signal.signal(signal.SIGINT, self.signal_handler(filename))
-			resp_count = 0
-			print "Starting uploading to yt... %s %s %s" % (self.channel, self.game, self.local_time) 
-			cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" % (self.shellquote(title), self.shellquote(self.game), self.shellquote(filename)) 
-			process_yt = subprocess.Popen(cmd, shell=True)
-			process_yt.wait()
-
-			while process_yt.returncode != 0 and resp_count != 5:
+			try:
+				print "Starting uploading to yt... %s %s %s" % (self.channel, self.game, self.local_time) 
+				cmd = "trickle -s -u 2048 youtube-upload --privacy=unlisted --title=\"%s\" --category=Gaming --tags=\"%s\" \"%s\"" % (self.shellquote(title), self.shellquote(self.game), self.shellquote(filename)) 
 				process_yt = subprocess.Popen(cmd, shell=True)
 				process_yt.wait()
-				resp_count = resp_count + 1
-				time.sleep(1)
-			
-			print("Finished uploading... Exiting %s %s %s" % (self.name, self.channel, self.game))
 
-			if resp_count == 5:
-				print("Upload failed, not removing video")
-			else:
+				print("Finished uploading... Exiting %s %s %s" % (self.name, self.channel, self.game))
+
 				cmd = "rm \"%s\"" % (self.shellquote(filename))
 				process_rm = subprocess.Popen(cmd, shell=True)
 				process_rm.wait()
-
-	def signal_handler(self, filename):
-		cmd = "rm \"%s\"" % (self.shellquote(filename))
-		process_rm = subprocess.Popen(cmd, shell=True)
-		process_rm.wait()
-
-		sys.exit(0)
-
+			except KeyboardInterrupt:
+				cmd = "rm \"%s\"" % (self.shellquote(filename))
+				process_rm = subprocess.Popen(cmd, shell=True)
+				process_rm.wait()
 
 	def stop(self):
 		print("Trying to stop thread %s: %s" % (self.channel, self.game))
 		if self.process is not None:
 			self.process.terminate()
 			self.process = None
-
 
 
 
@@ -296,6 +277,7 @@ def main():
 				sec_counter = 0
 			else:
 				sec_counter = sec_counter + 1
+				
 	print('Exiting Main Thread')
 
 threadLock = threading.Lock()
