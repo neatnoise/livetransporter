@@ -221,6 +221,7 @@ def dict_check(stream_dict_before, stream_dict_after):
 				after_list = stream_dict_after[key].split('|')
 			except:
 				print("Cannot create before or after list")
+				return 0
 			if after_list[0] != before_list[0]:
 				#start recording game changed
 				print("Game changed, stopping recording and starting %s" % (key_after))
